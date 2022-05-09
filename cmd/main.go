@@ -12,7 +12,7 @@ var wg sync.WaitGroup
 
 func main() {
 
-  websites := wof.Scan("websites")
+	websites := wof.Scan("websites")
 
 	success := make(chan string, 100)
 	fail := make(chan string, 100)
@@ -29,19 +29,16 @@ func Aggregate(suc <-chan string, fail <-chan string) wof.Aggregator {
 		select {
 		case url, ok := <-suc:
 			if !ok {
-				fmt.Println("closed suc")
+				fmt.Println(url)
 				suc = nil
 				break
 			}
-			fmt.Println("hit suc")
 			agg.Success(url)
 		case url, ok := <-fail:
 			if !ok {
-				fmt.Println("closed fail")
 				fail = nil
 				break
 			}
-			fmt.Println("hit fail")
 			agg.Failure(url)
 		}
 		if suc == nil && fail == nil {
@@ -55,21 +52,26 @@ func TestWebsites(websites []string, success chan<- string, fail chan<- string) 
 	defer close(success)
 	defer close(fail)
 
-  for _, website := range websites{
-			go TestWebsite(website, success, fail)
+	wg := sync.WaitGroup{}
+	for _, website := range websites {
+		wg.Add(1)
+		go TestWebsite(&wg, website, success, fail)
 	}
+
+	wg.Wait()
 }
 
-func TestWebsite(website string, success chan<- string, fail chan<- string) {
-	fmt.Printf("We testing %s\n", website)
+func TestWebsite(wg *sync.WaitGroup, website string, success chan<- string, fail chan<- string) {
 	pinger, err := ping.NewPinger(website)
 	pinger.SetPrivileged(true)
 
 	if err != nil {
 		fail <- website
+		wg.Done()
 		return
 	}
 	pinger.Count = 3
 	pinger.Run() // blocks until finished
 	success <- website
+	wg.Done()
 }
