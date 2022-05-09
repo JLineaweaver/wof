@@ -19,12 +19,12 @@ func main() {
 
 	go TestWebsites(websites, success, fail)
 
-	agg := Aggregate(success, fail)
+  agg := wof.Aggregator{}
+	Aggregate(&agg, success, fail)
 	agg.Results()
 }
 
-func Aggregate(suc <-chan string, fail <-chan string) wof.Aggregator {
-	agg := wof.Aggregator{}
+func Aggregate(agg *wof.Aggregator, suc <-chan string, fail <-chan string) {
 	for {
 		select {
 		case url, ok := <-suc:
@@ -45,7 +45,6 @@ func Aggregate(suc <-chan string, fail <-chan string) wof.Aggregator {
 			break
 		}
 	}
-	return agg
 }
 
 func TestWebsites(websites []string, success chan<- string, fail chan<- string) {
