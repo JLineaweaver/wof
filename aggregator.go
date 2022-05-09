@@ -7,7 +7,7 @@ import (
 )
 
 type Aggregator struct {
-	lock      *sync.Mutex
+	lock      sync.Mutex
 	successes []string
 	failures  []string
 }
