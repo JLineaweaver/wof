@@ -1,79 +1,72 @@
 package main
 
 import (
-	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/go-ping/ping"
+	"github.com/jlineaweaver/wof"
 )
 
 var wg sync.WaitGroup
 
-type Aggregator struct {
-	lock      sync.Mutex
-	successes []string
-	failures  []string
-}
-
-func (agg *Aggregator) Success(url string) {
-	defer agg.lock.Unlock()
-	agg.lock.Lock()
-	agg.successes = append(agg.successes, url)
-}
-
-func (agg *Aggregator) Failure(url string) {
-	defer agg.lock.Unlock()
-	agg.lock.Lock()
-	agg.failures = append(agg.failures, url)
-}
-
-func (agg *Aggregator) Results() {
-	fmt.Printf("Number of successes: %d\n", len(agg.successes))
-	fmt.Printf("Number of failures: %d\n", len(agg.failures))
-	if len(agg.failures) > 0 {
-		fmt.Printf("Failures: %s\n", strings.Join(agg.failures, ", "))
-	}
-}
-
 func main() {
 
-  worker := make(chan string, 10)
+	worker := make(chan string, 100)
+	go wof.Scan("websites", worker)
 
- // reader := wof.Reader{worker}
+	success := make(chan string, 100)
+	fail := make(chan string, 100)
 
-	suc := make(chan string, 10)
-	fail := make(chan string, 10)
+	go TestWebsites(worker, success, fail)
 
-	agg := Aggregate(suc, fail)
-
-	//wg.Wait()
+	agg := Aggregate(success, fail)
 	agg.Results()
 }
 
-func Aggregate(suc <-chan string, fail <-chan string) Aggregator {
-	agg := Aggregator{}
-	for i := 0; i < 4; i++ {
+func Aggregate(suc <-chan string, fail <-chan string) wof.Aggregator {
+	agg := wof.Aggregator{}
+	for {
 		select {
-		case url := <-suc:
+		case url, ok := <-suc:
+			if !ok {
+				suc = nil
+				break
+			}
 			agg.Success(url)
-		case url := <-fail:
+		case url, ok := <-fail:
+			if !ok {
+				fail = nil
+				break
+			}
 			agg.Failure(url)
 		}
+		if suc == nil && fail == nil {
+			break
+		}
 	}
-
 	return agg
 }
 
-func TestWebsite(website string, suc chan<- string, fail chan<- string) {
-	pinger, err := ping.NewPinger(website)
-	pinger.SetPrivileged(true)
+func TestWebsites(websites <-chan string, success chan<- string, fail chan<- string) {
+	defer close(success)
+	defer close(fail)
 
-	if err != nil {
-		fail <- website
+	for {
+		select {
+		case website, ok := <-websites:
+			if !ok {
+				return
+			}
+			pinger, err := ping.NewPinger(website)
+			pinger.SetPrivileged(true)
+
+			if err != nil {
+				fail <- website
+				break
+			}
+			pinger.Count = 3
+			pinger.Run() // blocks until finished
+			success <- website
+		}
 	}
-	pinger.Count = 3
-	pinger.Run() // blocks until finished
-
-	suc <- website
 }
