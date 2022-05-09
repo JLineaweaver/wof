@@ -5,8 +5,8 @@ import (
 	"os"
 )
 
-func Scan(file string, c chan<- string) {
-	defer close(c)
+func Scan(file string) []string {
+	results := []string{}
 
 	f, err := os.Open("websites")
 	if err != nil {
@@ -17,10 +17,11 @@ func Scan(file string, c chan<- string) {
 	scanner := bufio.NewScanner(f)
 
 	for scanner.Scan() {
-		c <- scanner.Text()
+		results = append(results, scanner.Text())
 	}
 
 	if err := scanner.Err(); err != nil {
 		panic(err)
 	}
+	return results
 }
